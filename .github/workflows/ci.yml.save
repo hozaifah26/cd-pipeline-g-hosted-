@@ -1,0 +1,68 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Deploy Docker container to VM
+      - name: Deploy Docker container
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          # Save the private key
+          echo "$SSH_PRIVATE_KEY" > key.pem
+          chmod 600 key.pem
+
+          # Copy repo from runner to VM
+          scp -i key.pem -o StrictHostKeyChecking=no -r . ubuntu@100.27.198.192:/home/ubuntu/github-hosted-VM
+
+          # SSH into VM and deploy Docker
+          ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@100.27.198.192 << 'EOF'
+            set -e
+
+            cd /home/ubuntu/github-hosted-VM
+
+            echo "Stopping any running container..."
+            # Stop the container if it's running
+            if [ "$(docker ps -q -f name=e-learning-container)" ]; then
+              docker stop e-learning-container
+            fi
+
+            echo "Removing any existing container (running or stopped)..."
+            # Remove the container if it exists
+            if [ "$(docker ps -a -q -f name=e-learning-container)" ]; then
+              docker rm e-learning-container
+            fi
+
+            echo "Building Docker image..."
+            docker build -t e-learning:latest .
+
+            echo "Running Docker container..."
+            docker run -d -p 8083:8083 --name e-learning-container e-learning:latest
+
+            echo "Waiting for container to start..."
+            sleep 5
+
+            echo "Testing container..."
+            if curl -s http://localhost:8083 | grep -q "<html"; then
+              echo "✅ Container is serving content."
+            else
+              echo "❌ Container failed to respond."
+              docker logs e-learning-container || true
+              exit 1
+            fi
+
+            echo "Deployment completed successfully."
+          EOF
+
+      # Step 3: Clean up SSH key
+      - name: Remove private key
+        run: rm -f key.pem
