@@ -50,7 +50,7 @@ jobs:
             sleep 5
 
             echo "Testing container..."
-            if curl -s http://localhost:8083 | grep -q "<html"; then
+            if curl -fs http://localhost:8083 > /dev/null; then
               echo "✅ Container is serving content."
             else
               echo "❌ Container failed to respond."
