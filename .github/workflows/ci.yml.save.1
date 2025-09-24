@@ -21,8 +21,8 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > key.pem
           chmod 600 key.pem
 
-          # Copy code to VM (exclude only .git)
-          rsync -avz --exclude='.git' -e "ssh -i key.pem -o StrictHostKeyChecking=no" ./ ubuntu@13.221.165.126:/home/ubuntu/cd-pipeline-g-hosted-
+          # Copy repo from runner to VM
+          scp -i key.pem -o StrictHostKeyChecking=no -r . ubuntu@13.221.165.126:/home/ubuntu/cd-pipeline-g-hosted-
 
           # SSH into VM and deploy Docker
           ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@13.221.165.126 << 'EOF'
@@ -31,11 +31,13 @@ jobs:
             cd /home/ubuntu/cd-pipeline-g-hosted-
 
             echo "Stopping any running container..."
+            # Stop the container if it's running
             if [ "$(docker ps -q -f name=e-learning-container)" ]; then
               docker stop e-learning-container
             fi
 
             echo "Removing any existing container (running or stopped)..."
+            # Remove the container if it exists
             if [ "$(docker ps -a -q -f name=e-learning-container)" ]; then
               docker rm e-learning-container
             fi
